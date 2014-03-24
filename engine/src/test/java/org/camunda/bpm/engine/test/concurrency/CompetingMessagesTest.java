@@ -13,18 +13,17 @@
 
 package org.camunda.bpm.engine.test.concurrency;
 
-import java.util.logging.Logger;
-
-import org.camunda.bpm.engine.OptimisticLockingException;
-import org.camunda.bpm.engine.impl.RuntimeServiceImpl;
-import org.camunda.bpm.engine.impl.interceptor.CommandExecutor;
-import org.camunda.bpm.engine.impl.interceptor.CommandInterceptor;
-import org.camunda.bpm.engine.impl.interceptor.RetryInterceptor;
-import org.camunda.bpm.engine.impl.pvm.delegate.ActivityBehavior;
-import org.camunda.bpm.engine.impl.pvm.delegate.ActivityExecution;
 import org.camunda.bpm.engine.impl.test.PluggableProcessEngineTestCase;
-import org.camunda.bpm.engine.runtime.ProcessInstance;
 import org.camunda.bpm.engine.test.Deployment;
+
+import java.util.HashMap;
+import java.util.Queue;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.logging.Logger;
 
 
 /**
@@ -33,95 +32,81 @@ import org.camunda.bpm.engine.test.Deployment;
 public class CompetingMessagesTest extends PluggableProcessEngineTestCase {
 
   private static Logger log = Logger.getLogger(CompetingMessagesTest.class.getName());
-  
-  Thread testThread = Thread.currentThread();
-  static ControllableThread activeThread;
-  
-  public class SignalThread extends ControllableThread {
-    
-    String executionId;
-    OptimisticLockingException exception;
-    
-    public SignalThread(String executionId) {
-      this.executionId = executionId;
-    }
 
-    @Override
-    public synchronized void startAndWaitUntilControlIsReturned() {
-      activeThread = this;
-      super.startAndWaitUntilControlIsReturned();
-    }
+  private static final int NUMBER_OF_THREADS = 3;
+  public static final int NUM_OF_PROCESS_INSTANCES = 30;
+
+  CountDownLatch latch = new CountDownLatch(NUM_OF_PROCESS_INSTANCES);
+  Queue<String> correlationIds = new ConcurrentLinkedQueue<String>();
+
+  public class StarterThread implements Runnable {
+
+    Exception exception;
 
     public void run() {
       try {
-        runtimeService.signal(executionId);
-      } catch (OptimisticLockingException e) {
+        HashMap<String, Object> variables = new HashMap<String, Object>();
+        String correlateId = UUID.randomUUID().toString();
+        correlationIds.add(correlateId);
+        variables.put("correlation", correlateId);
+        runtimeService.startProcessInstanceByKey("competingMessages", variables);
+      } catch (Exception e) {
         this.exception = e;
+      } finally {
+        synchronized (latch) {
+          latch.countDown();
+        }
+        log.fine(StarterThread.class.getName() + " ends");
       }
-      log.fine(getName()+" ends");
     }
   }
-  
-  public static class ControlledConcurrencyBehavior implements ActivityBehavior {
-    public void execute(ActivityExecution execution) throws Exception {
-      activeThread.returnControlToTestThreadAndWait();
+
+  public class MessageThread implements Runnable {
+
+    Exception exception;
+
+    public void run() {
+      try {
+        String correlationId = correlationIds.poll();
+
+        if (correlationId != null) {
+          HashMap<String, Object> variables = new HashMap<String, Object>();
+          variables.put("result", Boolean.toString(correlationId.hashCode() % 2 == 0));
+
+          HashMap<String, Object> correlationKeys = new HashMap<String, Object>();
+          correlationKeys.put("correlation", correlationId);
+          runtimeService.correlateMessage("catch-msg", correlationKeys, variables);
+        }
+      } catch (Exception e) {
+        this.exception = e;
+        Thread.currentThread().interrupt();
+      } finally {
+        synchronized (latch) {
+          latch.countDown();
+        }
+        log.fine(MessageThread.class.getName() + " ends");
+      }
     }
   }
   
   @Deployment
-  public void testCompetingSignals() throws Exception {
-    ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("CompetingSignalsProcess");
-    String processInstanceId = processInstance.getId();
-
-    log.fine("test thread starts thread one");
-    SignalThread threadOne = new SignalThread(processInstanceId);
-    threadOne.startAndWaitUntilControlIsReturned();
-    
-    log.fine("test thread continues to start thread two");
-    SignalThread threadTwo = new SignalThread(processInstanceId);
-    threadTwo.startAndWaitUntilControlIsReturned();
-
-    log.fine("test thread notifies thread 1");
-    threadOne.proceedAndWaitTillDone();
-    assertNull(threadOne.exception);
-
-    log.fine("test thread notifies thread 2");
-    threadTwo.proceedAndWaitTillDone();
-    assertNotNull(threadTwo.exception);
-    assertTextPresent("was updated by another transaction concurrently", threadTwo.exception.getMessage());
-  }
-  
-  @Deployment(resources={"org/camunda/bpm/engine/test/concurrency/CompetingSignalsTest.testCompetingSignals.bpmn20.xml"})
-  public void testCompetingSignalsWithRetry() throws Exception {
-    RuntimeServiceImpl runtimeServiceImpl = (RuntimeServiceImpl)runtimeService;        
-    CommandExecutor before = runtimeServiceImpl.getCommandExecutor();
-    try {
-      CommandInterceptor retryInterceptor = new RetryInterceptor();
-      retryInterceptor.setNext(before);
-      runtimeServiceImpl.setCommandExecutor(retryInterceptor);
-      
-      ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("CompetingSignalsProcess");
-      String processInstanceId = processInstance.getId();
-  
-      log.fine("test thread starts thread one");
-      SignalThread threadOne = new SignalThread(processInstanceId);
-      threadOne.startAndWaitUntilControlIsReturned();
-      
-      log.fine("test thread continues to start thread two");
-      SignalThread threadTwo = new SignalThread(processInstanceId);
-      threadTwo.startAndWaitUntilControlIsReturned();
-  
-      log.fine("test thread notifies thread 1");
-      threadOne.proceedAndWaitTillDone();
-      assertNull(threadOne.exception);
-  
-      log.fine("test thread notifies thread 2");
-      threadTwo.proceedAndWaitTillDone();
-      assertNull(threadTwo.exception);
-    } finally {
-      // reset the command executor
-      runtimeServiceImpl.setCommandExecutor(before);
+  public void testCompetingCorrelatingMessages() throws Exception {
+    final ExecutorService taskExecutor = Executors.newFixedThreadPool(NUMBER_OF_THREADS);
+    final StarterThread prozessStarter = new StarterThread();
+    for (int i = 0; i < NUM_OF_PROCESS_INSTANCES; i++) {
+      taskExecutor.execute(prozessStarter);
     }
-    
+    latch.await();
+
+    final MessageThread messageSender = new MessageThread();
+    for (int i = 0; i < NUM_OF_PROCESS_INSTANCES; i++) {
+      taskExecutor.execute(messageSender);
+    }
+    latch.await();
+
+    taskExecutor.shutdown();
+
+    assertNull(prozessStarter.exception);
+    assertNotNull(messageSender.exception);
   }
 }

@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd" id="_O4dQ4Ze3EeOl2IYlCBG4yA" xmlns:camunda="http://activiti.org/bpmn" targetNamespace="http://activiti.org/bpmn">
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd" id="_O4dQ4Ze3EeOl2IYlCBG4yA" targetNamespace="http://activiti.org/bpmn">
   <bpmn2:message id="Message_2" name="catch-msg"/>
 
-  <bpmn2:process id="correlatingMessages" name="Wait for Message" isExecutable="true">
+  <bpmn2:process id="competingMessages" name="Wait for Message" isExecutable="true">
     <bpmn2:startEvent id="StartEvent_2">
       <bpmn2:outgoing>SequenceFlow_3</bpmn2:outgoing>
     </bpmn2:startEvent>
 
-    <bpmn2:sequenceFlow id="SequenceFlow_3" name="" sourceRef="StartEvent_2" targetRef="serviceTask_1"/>
+    <bpmn2:sequenceFlow id="SequenceFlow_3" name="" sourceRef="StartEvent_2" targetRef="scriptTask_1"/>
 
-    <bpmn2:serviceTask id="serviceTask_1" name="debug1" camunda:expression="${true}">
+    <bpmn2:scriptTask id="scriptTask_1" name="debug1" scriptFormat="groovy">
       <bpmn2:incoming>SequenceFlow_3</bpmn2:incoming>
       <bpmn2:outgoing>SequenceFlow_4</bpmn2:outgoing>
-    </bpmn2:serviceTask>
+      <bpmn2:script><![CDATA[println "warte auf eingehende Nachricht...";]]></bpmn2:script>
+    </bpmn2:scriptTask>
 
-    <bpmn2:sequenceFlow id="SequenceFlow_4" name="" sourceRef="serviceTask_1" targetRef="IntermediateCatchEvent_1"/>
+    <bpmn2:sequenceFlow id="SequenceFlow_4" name="" sourceRef="scriptTask_1" targetRef="IntermediateCatchEvent_1"/>
 
     <bpmn2:intermediateCatchEvent id="IntermediateCatchEvent_1">
       <bpmn2:incoming>SequenceFlow_4</bpmn2:incoming>
@@ -30,22 +31,30 @@
       <bpmn2:outgoing>SequenceFlow_10</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
 
-    <bpmn2:sequenceFlow id="SequenceFlow_9" name="default" sourceRef="ExclusiveGateway_1" targetRef="serviceTask_2"/>
-    <bpmn2:sequenceFlow id="SequenceFlow_10" name="false" sourceRef="ExclusiveGateway_1" targetRef="serviceTask_3">
+    <bpmn2:sequenceFlow id="SequenceFlow_9" name="default" sourceRef="ExclusiveGateway_1" targetRef="scriptTask_2"/>
+    <bpmn2:sequenceFlow id="SequenceFlow_10" name="false" sourceRef="ExclusiveGateway_1" targetRef="scriptTask_3">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression"><![CDATA[${result == "false"}]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
 
-    <bpmn2:serviceTask id="serviceTask_2" name="debug true path"  camunda:expression="${true}">
+    <bpmn2:scriptTask id="scriptTask_2" name="debug true path" scriptFormat="groovy">
       <bpmn2:incoming>SequenceFlow_9</bpmn2:incoming>
       <bpmn2:outgoing>SequenceFlow_8</bpmn2:outgoing>
-    </bpmn2:serviceTask>
-    <bpmn2:sequenceFlow id="SequenceFlow_8" name="" sourceRef="serviceTask_2" targetRef="ExclusiveGateway_2"/>
+      <bpmn2:script><![CDATA[println "Nachricht entgegengenommen. Ergebnis positiv!";
+println "Schlafe 2 Sekunden...";
+Thread.sleep(2000);
+println "Aufgabe beendet.";]]></bpmn2:script>
+    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="SequenceFlow_8" name="" sourceRef="scriptTask_2" targetRef="ExclusiveGateway_2"/>
 
-    <bpmn2:serviceTask id="serviceTask_3" name="debug false path" camunda:expression="${true}">
+    <bpmn2:scriptTask id="scriptTask_3" name="debug false path" scriptFormat="groovy">
       <bpmn2:incoming>SequenceFlow_10</bpmn2:incoming>
       <bpmn2:outgoing>SequenceFlow_11</bpmn2:outgoing>
-    </bpmn2:serviceTask>
-    <bpmn2:sequenceFlow id="SequenceFlow_11" name="" sourceRef="serviceTask_3" targetRef="ExclusiveGateway_2"/>
+      <bpmn2:script><![CDATA[println "Nachricht entgegengenommen. Ergebnis negativ!";
+println "Schlafe 4 Sekunden...";
+Thread.sleep(4000);
+println "Aufgabe beendet.";]]></bpmn2:script>
+    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="SequenceFlow_11" name="" sourceRef="scriptTask_3" targetRef="ExclusiveGateway_2"/>
 
     <bpmn2:exclusiveGateway id="ExclusiveGateway_2">
       <bpmn2:incoming>SequenceFlow_8</bpmn2:incoming>
@@ -62,7 +71,7 @@
   </bpmn2:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="de.provinzial.bpm.demo.wait-message">
-      <bpmndi:BPMNShape id="_BPMNShape_serviceTask_2" bpmnElement="serviceTask_1">
+      <bpmndi:BPMNShape id="_BPMNShape_scriptTask_2" bpmnElement="scriptTask_1">
         <dc:Bounds height="80.0" width="100.0" x="211.0" y="212.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_BPMNShape_StartEvent_3" bpmnElement="StartEvent_2">
@@ -71,7 +80,7 @@
           <dc:Bounds height="0.0" width="0.0" x="126.0" y="275.0"/>
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_3" bpmnElement="SequenceFlow_3" sourceElement="_BPMNShape_StartEvent_3" targetElement="_BPMNShape_serviceTask_2">
+      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_3" bpmnElement="SequenceFlow_3" sourceElement="_BPMNShape_StartEvent_3" targetElement="_BPMNShape_scriptTask_2">
         <di:waypoint xsi:type="dc:Point" x="144.0" y="252.0"/>
         <di:waypoint xsi:type="dc:Point" x="211.0" y="252.0"/>
         <bpmndi:BPMNLabel>
@@ -81,11 +90,11 @@
       <bpmndi:BPMNShape id="_BPMNShape_IntermediateCatchEvent_2" bpmnElement="IntermediateCatchEvent_1">
         <dc:Bounds height="36.0" width="36.0" x="361.0" y="234.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_4" bpmnElement="SequenceFlow_4" sourceElement="_BPMNShape_serviceTask_2" targetElement="_BPMNShape_IntermediateCatchEvent_2">
+      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_4" bpmnElement="SequenceFlow_4" sourceElement="_BPMNShape_scriptTask_2" targetElement="_BPMNShape_IntermediateCatchEvent_2">
         <di:waypoint xsi:type="dc:Point" x="311.0" y="252.0"/>
         <di:waypoint xsi:type="dc:Point" x="361.0" y="252.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNShape id="_BPMNShape_serviceTask_3" bpmnElement="serviceTask_2">
+      <bpmndi:BPMNShape id="_BPMNShape_scriptTask_3" bpmnElement="scriptTask_2">
         <dc:Bounds height="80.0" width="100.0" x="552.0" y="120.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_BPMNShape_ExclusiveGateway_2" bpmnElement="ExclusiveGateway_1" isMarkerVisible="true">
@@ -101,7 +110,7 @@
           <dc:Bounds height="0.0" width="0.0" x="727.0" y="284.0"/>
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_8" bpmnElement="SequenceFlow_8" sourceElement="_BPMNShape_serviceTask_3" targetElement="_BPMNShape_ExclusiveGateway_3">
+      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_8" bpmnElement="SequenceFlow_8" sourceElement="_BPMNShape_scriptTask_3" targetElement="_BPMNShape_ExclusiveGateway_3">
         <di:waypoint xsi:type="dc:Point" x="652.0" y="160.0"/>
         <di:waypoint xsi:type="dc:Point" x="677.0" y="160.0"/>
         <di:waypoint xsi:type="dc:Point" x="727.0" y="160.0"/>
@@ -110,7 +119,7 @@
           <dc:Bounds height="6.0" width="6.0" x="674.0" y="160.0"/>
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_9" bpmnElement="SequenceFlow_9" sourceElement="_BPMNShape_ExclusiveGateway_2" targetElement="_BPMNShape_serviceTask_3">
+      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_9" bpmnElement="SequenceFlow_9" sourceElement="_BPMNShape_ExclusiveGateway_2" targetElement="_BPMNShape_scriptTask_3">
         <di:waypoint xsi:type="dc:Point" x="472.0" y="227.0"/>
         <di:waypoint xsi:type="dc:Point" x="472.0" y="160.0"/>
         <di:waypoint xsi:type="dc:Point" x="552.0" y="160.0"/>
@@ -118,10 +127,10 @@
           <dc:Bounds height="22.0" width="44.0" x="474.0" y="140.0"/>
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNShape id="_BPMNShape_serviceTask_4" bpmnElement="serviceTask_3">
+      <bpmndi:BPMNShape id="_BPMNShape_scriptTask_4" bpmnElement="scriptTask_3">
         <dc:Bounds height="80.0" width="100.0" x="552.0" y="300.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_10" bpmnElement="SequenceFlow_10" sourceElement="_BPMNShape_ExclusiveGateway_2" targetElement="_BPMNShape_serviceTask_4">
+      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_10" bpmnElement="SequenceFlow_10" sourceElement="_BPMNShape_ExclusiveGateway_2" targetElement="_BPMNShape_scriptTask_4">
         <di:waypoint xsi:type="dc:Point" x="472.0" y="277.0"/>
         <di:waypoint xsi:type="dc:Point" x="472.0" y="340.0"/>
         <di:waypoint xsi:type="dc:Point" x="552.0" y="340.0"/>
@@ -129,7 +138,7 @@
           <dc:Bounds height="22.0" width="33.0" x="480.0" y="312.0"/>
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_11" bpmnElement="SequenceFlow_11" sourceElement="_BPMNShape_serviceTask_4" targetElement="_BPMNShape_ExclusiveGateway_3">
+      <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_11" bpmnElement="SequenceFlow_11" sourceElement="_BPMNShape_scriptTask_4" targetElement="_BPMNShape_ExclusiveGateway_3">
         <di:waypoint xsi:type="dc:Point" x="652.0" y="340.0"/>
         <di:waypoint xsi:type="dc:Point" x="677.0" y="340.0"/>
         <di:waypoint xsi:type="dc:Point" x="727.0" y="340.0"/>
